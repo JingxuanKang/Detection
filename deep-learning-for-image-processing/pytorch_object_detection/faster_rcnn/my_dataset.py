@@ -127,7 +127,7 @@ class VOCDataSet(Dataset):
         data_width = int(data["size"]["width"])
         return data_height, data_width
 
-    def     parse_xml_to_dict(self, xml):
+    def parse_xml_to_dict(self, xml):
         """
         将xml文件解析成字典形式，参考tensorflow的recursive_parse_xml_to_dict
         Args:
