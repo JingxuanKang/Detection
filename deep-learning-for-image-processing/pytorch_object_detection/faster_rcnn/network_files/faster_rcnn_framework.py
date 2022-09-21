@@ -24,7 +24,8 @@ class FasterRCNNBase(nn.Module):
         transform (nn.Module): performs the data transformation from the inputs to feed into
             the model
     """
-
+    # 初始化包括使用的提取特征的网络，第二部分是rpn，区域建议，roi_head是
+    # pooling到 那两个分类和回归的mlp。
     def __init__(self, backbone, rpn, roi_heads, transform):
         super(FasterRCNNBase, self).__init__()
         self.transform = transform
@@ -43,6 +44,27 @@ class FasterRCNNBase(nn.Module):
         return detections
 
     def forward(self, images, targets=None):
+        # 下面这个不是注释，而是类型检测。
+        # 这里说明是输入的是List，list中每个元素是Tensor. 这里输入的images大小是不同的。
+        # 后面会放入同样大小的tensor打包成一个batch。 target就是标签信息。
+
+        # 这里如果还不清楚可以去看mydataset.py的返回结果。
+        # 这里dataloader还额外用了个collate_fn=utils.collate_fn
+        # 默认是torch.stack()图像分类问题。 但是这里由于输入尺寸不同。(标签的长度不同。)
+        # 直接拼接会出问题 return tuple(zip(*batch))
+
+        # 输入是list(长度是batchsize) 这里就是8。而每个元素是tuple，
+        # 这个tuple包括两个元素，一个是图像tensor，一个是dict类型，包括标签。
+        #### zip将可迭代对象作为参数，将对象中对应元素打包成元组
+        # 经过zip就是图像一个元组，target dic一个元组了。
+
+        # 另外，元组就是不可变类型的列表，而且可以存不同。
+        # 所以最终就是 最外层tuple，两个，第一个tuple里面又是tuple，8个元素，
+        # 每个元素是一个3-dtensor. 第二个tuple里是8个dict。包含坐标啊啥的。
+
+        # 这个辅助函数就是把image和target分别打包都一起。
+
+        # 所以这个类型说明，image是list tensor，target是 list里面包了dict
         # type: (List[Tensor], Optional[List[Dict[str, Tensor]]]) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
         """
         Arguments:
@@ -56,6 +78,7 @@ class FasterRCNNBase(nn.Module):
                 like `scores`, `labels` and `mask` (for Mask R-CNN models).
 
         """
+        # 训练模式，name必须要target。如果是空的话，报错。
         if self.training and targets is None:
             raise ValueError("In training mode, targets should be passed")
 
@@ -63,6 +86,8 @@ class FasterRCNNBase(nn.Module):
             assert targets is not None
             for target in targets:         # 进一步判断传入的target的boxes参数是否符合规定
                 boxes = target["boxes"]
+                # 检测下是不是tensor
+                # 以及shape一定是2，第一维是目标个数，第二维是4. 不是就不对。 
                 if isinstance(boxes, torch.Tensor):
                     if len(boxes.shape) != 2 or boxes.shape[-1] != 4:
                         raise ValueError("Expected target boxes to be a tensor"
@@ -72,13 +97,17 @@ class FasterRCNNBase(nn.Module):
                     raise ValueError("Expected target boxes to be of type "
                                      "Tensor, got {:}.".format(type(boxes)))
 
+
+        # 这个变量用来存储每张图像的size
         original_image_sizes = torch.jit.annotate(List[Tuple[int, int]], [])
         for img in images:
+            # 这里读图片要的是 后两个，因为pytorch存法是 channel , h, w
             val = img.shape[-2:]
+            # 这里取了两个val肯定是2，不是2就报个错。
             assert len(val) == 2  # 防止输入的是个一维向量
             original_image_sizes.append((val[0], val[1]))
         # original_image_sizes = [img.shape[-2:] for img in images]
-
+        # 上面的所有步骤就是为了得到
         images, targets = self.transform(images, targets)  # 对图像进行预处理
 
         # print(images.tensors.shape)
