@@ -8,6 +8,7 @@ import torchvision
 from .image_list import ImageList
 
 
+
 @torch.jit.unused
 def _resize_image_onnx(image, self_min_size, self_max_size):
     # type: (Tensor, float, float) -> Tensor
@@ -45,6 +46,7 @@ def _resize_image(image, self_min_size, self_max_size):
     return image
 
 
+# 这部分实现的是输入网络之前的transform过程
 class GeneralizedRCNNTransform(nn.Module):
     """
     Performs input / target transformation before feeding the data to a GeneralizedRCNN
@@ -56,7 +58,7 @@ class GeneralizedRCNNTransform(nn.Module):
 
     It returns a ImageList for the inputs, and a List[Dict[Tensor]] for the targets
     """
-
+    
     def __init__(self, min_size, max_size, image_mean, image_std):
         super(GeneralizedRCNNTransform, self).__init__()
         if not isinstance(min_size, (list, tuple)):

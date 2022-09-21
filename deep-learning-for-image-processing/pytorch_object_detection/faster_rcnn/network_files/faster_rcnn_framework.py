@@ -11,7 +11,7 @@ from .roi_head import RoIHeads
 from .transform import GeneralizedRCNNTransform
 from .rpn_function import AnchorsGenerator, RPNHead, RegionProposalNetwork
 
-
+# Base写的就是整个流程
 class FasterRCNNBase(nn.Module):
     """
     Main class for Generalized R-CNN.
@@ -107,17 +107,25 @@ class FasterRCNNBase(nn.Module):
             assert len(val) == 2  # 防止输入的是个一维向量
             original_image_sizes.append((val[0], val[1]))
         # original_image_sizes = [img.shape[-2:] for img in images]
-        # 上面的所有步骤就是为了得到
+        # 上面的所有步骤就是为了得到原始图像的size，因为transform会改变size
+        # 所以之后要返回，所以要记录。
         images, targets = self.transform(images, targets)  # 对图像进行预处理
 
         # print(images.tensors.shape)
         features = self.backbone(images.tensors)  # 将图像输入backbone得到特征图
+
+
+
         if isinstance(features, torch.Tensor):  # 若只在一层特征层上预测，将feature放入有序字典中，并编号为‘0’
+
+            # 如果是FPN或者是ResNet预处理，会使用多个特征图。所以这里是把特征放到有序字典中。为了和多层统一
             features = OrderedDict([('0', features)])  # 若在多层特征层上预测，传入的就是一个有序字典
 
         # 将特征层以及标注target信息传入rpn中
         # proposals: List[Tensor], Tensor_shape: [num_proposals, 4],
         # 每个proposals是绝对坐标，且为(x1, y1, x2, y2)格式
+
+        # 将图片，特征，标注都输入rpn，得到建议框和损失
         proposals, proposal_losses = self.rpn(images, features, targets)
 
         # 将rpn生成的数据以及标注target信息传入fast rcnn后半部分
@@ -192,7 +200,7 @@ class FastRCNNPredictor(nn.Module):
 
         return scores, bbox_deltas
 
-
+# 这个继承Base,定义一系列模块
 class FasterRCNN(FasterRCNNBase):
     """
     Implements Faster R-CNN.
@@ -272,7 +280,8 @@ class FasterRCNN(FasterRCNNBase):
             bounding boxes
 
     """
-
+    # backbone预处理网络，num_classes检测的目标类别个数(21 包括背景)
+    # 感觉这个分开写是让模型更清楚。
     def __init__(self, backbone, num_classes=None,
                  # transform parameter
                  min_size=800, max_size=1333,      # 预处理resize时限制的最小尺寸与最大尺寸
@@ -281,17 +290,25 @@ class FasterRCNN(FasterRCNNBase):
                  rpn_anchor_generator=None, rpn_head=None,
                  rpn_pre_nms_top_n_train=2000, rpn_pre_nms_top_n_test=1000,    # rpn中在nms处理前保留的proposal数(根据score)
                  rpn_post_nms_top_n_train=2000, rpn_post_nms_top_n_test=1000,  # rpn中在nms处理后保留的proposal数
+                 # 前后相同是针对FPN金字塔的网络，多个特征层，每层2000个就上万了。
                  rpn_nms_thresh=0.7,  # rpn中进行nms处理时使用的iou阈值
+
+                 # 这里意思是大于0.7正样本，小于0.3 负样本
                  rpn_fg_iou_thresh=0.7, rpn_bg_iou_thresh=0.3,  # rpn计算损失时，采集正负样本设置的阈值
+
+                 # 总共使用256个框，各一半正负
                  rpn_batch_size_per_image=256, rpn_positive_fraction=0.5,  # rpn计算损失时采样的样本数，以及正样本占总样本的比例
                  rpn_score_thresh=0.0,
                  # Box parameters
                  box_roi_pool=None, box_head=None, box_predictor=None,
                  # 移除低目标概率      fast rcnn中进行nms处理的阈值   对预测结果根据score排序取前100个目标
                  box_score_thresh=0.05, box_nms_thresh=0.5, box_detections_per_img=100,
+
+                 # 大于0.5 才是truth
                  box_fg_iou_thresh=0.5, box_bg_iou_thresh=0.5,   # fast rcnn计算误差时，采集正负样本设置的阈值
                  box_batch_size_per_image=512, box_positive_fraction=0.25,  # fast rcnn计算误差时采样的样本数，以及正样本占所有样本的比例
                  bbox_reg_weights=None):
+        # 判断有没有out channels，输出的特征矩阵的channel。 如果没有就会报错。
         if not hasattr(backbone, "out_channels"):
             raise ValueError(
                 "backbone should contain an attribute out_channels"
