@@ -27,11 +27,15 @@ def _resize_image_onnx(image, self_min_size, self_max_size):
 
 def _resize_image(image, self_min_size, self_max_size):
     # type: (Tensor, float, float) -> Tensor
+
+    # 首先这个方法的目的是缩放图片，其次图片有一个最小边长和最大边长两个限制，
+    # 是因为每张图片的长宽都不同。 这里做法是先 根据短边缩放，如果按照短边的比例长边超过最大值
+    # 那么按照长边的比例缩放。可以看出来还是想尽可能让图片大一点。
     im_shape = torch.tensor(image.shape[-2:])
     min_size = float(torch.min(im_shape))    # 获取高宽中的最小值
     max_size = float(torch.max(im_shape))    # 获取高宽中的最大值
     scale_factor = self_min_size / min_size  # 根据指定最小边长和图片最小边长计算缩放比例
-
+    
     # 如果使用该缩放比例计算的图片最大边长大于指定的最大边长
     if max_size * scale_factor > self_max_size:
         scale_factor = self_max_size / max_size  # 将缩放比例设为指定最大边长和图片最大边长之比
@@ -74,6 +78,9 @@ class GeneralizedRCNNTransform(nn.Module):
         mean = torch.as_tensor(self.image_mean, dtype=dtype, device=device)
         std = torch.as_tensor(self.image_std, dtype=dtype, device=device)
         # [:, None, None]: shape [3] -> [3, 1, 1]
+
+        # 这个的图片是3-dtensor 而mean 和 std是 [0.45,0.4,0.6] 这样显然不能运算。
+        # 所以把后者也变成3-d 的，然后就可以进行运算。
         return (image - mean[:, None, None]) / std[:, None, None]
 
     def torch_choice(self, k):
