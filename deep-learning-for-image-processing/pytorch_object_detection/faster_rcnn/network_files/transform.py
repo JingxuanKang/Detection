@@ -161,7 +161,7 @@ class GeneralizedRCNNTransform(nn.Module):
             for index, item in enumerate(sublist):
                 maxes[index] = max(maxes[index], item)
         return maxes
-
+    # 这里做法是把最大的高宽找出来(就是你最先设置的。)然后把其他图片都放在这个tensor的左上角
     def batch_images(self, images, size_divisible=32):
         # type: (List[Tensor], int) -> Tensor
         """
@@ -279,6 +279,9 @@ def resize_boxes(boxes, original_size, new_size):
         original_size: 图像缩放前的尺寸
         new_size: 图像缩放后的尺寸
     """
+    # 这块处理很sb，其实是比如按照min尺寸缩放，把原来的边长缩放到min。
+    # 总之结果就是一个边长到达min，另一个不能超过max，然后根据长宽分别计算ratio。
+    # 再把框的长宽根据这个长宽缩放。
     ratios = [
         torch.tensor(s, dtype=torch.float32, device=boxes.device) /
         torch.tensor(s_orig, dtype=torch.float32, device=boxes.device)
