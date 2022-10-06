@@ -8,7 +8,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
-
+# dropout
 def drop_path(x, drop_prob: float = 0., training: bool = False):
     """
     Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
@@ -39,11 +39,11 @@ class DropPath(nn.Module):
     def forward(self, x):
         return drop_path(x, self.drop_prob, self.training)
 
-
+# Patch embedding
 class PatchEmbed(nn.Module):
     """
     2D Image to Patch Embedding
-    """
+    """  
     def __init__(self, img_size=224, patch_size=16, in_c=3, embed_dim=768, norm_layer=None):
         super().__init__()
         img_size = (img_size, img_size)
@@ -60,15 +60,16 @@ class PatchEmbed(nn.Module):
         B, C, H, W = x.shape
         assert H == self.img_size[0] and W == self.img_size[1], \
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
-
+        # B 768 14 14 -> B 768 196 -> B 196 768
         # flatten: [B, C, H, W] -> [B, C, HW]
         # transpose: [B, C, HW] -> [B, HW, C]
         x = self.proj(x).flatten(2).transpose(1, 2)
         x = self.norm(x)
         return x
 
-
+# Multi Head Attention
 class Attention(nn.Module):
+    # 8头注意力，qkv不适用bias 
     def __init__(self,
                  dim,   # 输入token的dim
                  num_heads=8,
@@ -78,14 +79,18 @@ class Attention(nn.Module):
                  proj_drop_ratio=0.):
         super(Attention, self).__init__()
         self.num_heads = num_heads
+        # 由于最后要concat，所以多头的话，均分。
         head_dim = dim // num_heads
-        self.scale = qk_scale or head_dim ** -0.5
+        self.scale = qk_scale or head_dim ** -0.5 # 文章里那个根号分之
+        # 矩阵运算 qkv矩阵。 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop_ratio)
+        # 全连接层映射
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop_ratio)
 
     def forward(self, x):
+        # 图片个数。 196+1=197(分类头)  768
         # [batch_size, num_patches + 1, total_embed_dim]
         B, N, C = x.shape
 
